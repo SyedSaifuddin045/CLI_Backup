@@ -1,10 +1,8 @@
 package backupengine
 
 import (
-	"fmt"
-	"io"
 	"os"
-	"path/filepath"
+	"sync"
 
 	"cli_backup_tool/internal/logging"
 )
@@ -17,61 +15,73 @@ func NewCopyBackupStrategy() *CopyBackupStrategy {
 
 // Backup performs a recursive copy from source to each destination
 func (r *CopyBackupStrategy) Backup(source string, destinations []string) error {
+	// No need for fmt package import - using only the logger
+
+	// Create a wait group to wait for all backup operations to complete
+	var wg sync.WaitGroup
+
+	// Create an error channel to collect errors from goroutines
+	errChan := make(chan error, len(destinations))
+
+	// Launch a goroutine for each destination
 	for _, dest := range destinations {
-		logging.InfoLogger.Printf("Starting recursive backup to %s\n", dest)
-		err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				logging.ErrorLogger.Printf("Error accessing path %s: %v\n", path, err)
+		wg.Add(1)
+
+		// Capture the destination variable to avoid data race
+		destination := dest
+
+		go func() {
+			defer wg.Done()
+
+			logging.InfoLogger.Printf("Starting concurrent backup to %s\n", destination)
+
+			// Define the file handling function for this destination
+			fileProcessor := func(sourcePath, destPath string, info os.FileInfo) error {
+				err := copyFile(sourcePath, destPath, info)
+				if err != nil {
+					logging.ErrorLogger.Printf("Error copying file %s: %v\n", sourcePath, err)
+				}
 				return err
 			}
 
-			relPath, err := filepath.Rel(source, path)
-			if err != nil {
-				logging.ErrorLogger.Printf("Error getting relative path: %v\n", err)
+			// Define the directory handling function for this destination
+			dirProcessor := func(sourcePath, destPath string, info os.FileInfo) error {
+				err := os.MkdirAll(destPath, info.Mode())
+				if err != nil {
+					logging.ErrorLogger.Printf("Error creating directory %s: %v\n", destPath, err)
+				}
 				return err
 			}
 
-			destPath := filepath.Join(dest, relPath)
+			// Use the utility function to walk the directory
+			err := WalkSourceToDest(source, destination, fileProcessor, dirProcessor)
 
-			if info.IsDir() {
-				return os.MkdirAll(destPath, info.Mode())
+			if err != nil {
+				logging.ErrorLogger.Printf("Failed to back up to %s: %v\n", destination, err)
+				errChan <- err
+				return
 			}
 
-			return copyFile(path, destPath, info)
-		})
-
-		if err != nil {
-			logging.ErrorLogger.Printf("Failed to back up to %s: %v\n", dest, err)
-			return err
-		}
-
-		logging.InfoLogger.Printf("Backup to %s completed successfully\n", dest)
-	}
-	return nil
-}
-
-// copyFile copies an individual file from src to dst
-func copyFile(src, dst string, info os.FileInfo) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("failed to open source file %s: %w", src, err)
-	}
-	defer srcFile.Close()
-
-	err = os.MkdirAll(filepath.Dir(dst), 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create directories for %s: %w", dst, err)
+			logging.InfoLogger.Printf("Backup to %s completed successfully\n", destination)
+		}()
 	}
 
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
-	if err != nil {
-		return fmt.Errorf("failed to create destination file %s: %w", dst, err)
-	}
-	defer dstFile.Close()
+	// Wait for all goroutines to complete
+	wg.Wait()
 
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy file from %s to %s: %w", src, dst, err)
+	// Close the error channel
+	close(errChan)
+
+	// Collect all errors
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	// Return the first error if any occurred
+	if len(errs) > 0 {
+		logging.ErrorLogger.Printf("Errors occurred during concurrent backup: %v\n", errs)
+		return errs[0]
 	}
 
 	return nil
