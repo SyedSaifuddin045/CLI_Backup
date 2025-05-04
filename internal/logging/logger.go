@@ -13,8 +13,6 @@ var (
 	DebugLogger *log.Logger
 )
 
-var Logger *log.Logger
-
 // Init initializes the logger with custom or default values.
 func Init(logToFile bool, debug bool, logFilePath string) {
 	// Ensure that the directory for the log file exists
