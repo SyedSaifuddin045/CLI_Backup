@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"cli_backup_tool/internal/logging"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cli_backup_tool",
-	Short: "A brief description of your application",
+	Short: "A tool for taking backups of important files",
 	Long: `A longer description that spans multiple lines and likely contains
 examples and usage of using your application. For example:
 
@@ -29,6 +30,7 @@ to quickly create a Cobra application.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
+		logging.ErrorLogger.Println("Issue in executing root command")
 		os.Exit(1)
 	}
 }

@@ -4,6 +4,9 @@ test*
 # Ignore folders starting with 'test'
 test*/
 
+# Ignore log files
+*.log
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
