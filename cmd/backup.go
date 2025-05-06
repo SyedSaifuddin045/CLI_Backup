@@ -52,9 +52,8 @@ var backupCmd = &cobra.Command{
 		switch strategy {
 		case "copy":
 			backup = backupengine.NewCopyBackupStrategy()
-		case "compressed":
-			logging.ErrorLogger.Println("Compressed backup strategy not yet implemented.")
-			os.Exit(1)
+		case "compress":
+			backup = backupengine.NewZipBackupStrategy()
 		default:
 			logging.ErrorLogger.Printf("Unknown backup strategy: %s\n", strategy)
 			os.Exit(1)
@@ -76,7 +75,7 @@ func init() {
 	backupCmd.Flags().StringVarP(&sourcePath, "source", "s", "", "Source directory to back up (required)")
 	backupCmd.Flags().StringSliceVarP(&destPath, "dest", "d", []string{}, "Destination directories (comma-separated)")
 
-	backupCmd.Flags().StringVarP(&strategy, "strategy", "t", "copy", "Backup strategy: copy, compressed (default: copy)")
+	backupCmd.Flags().StringVarP(&strategy, "strategy", "t", "copy", "Backup strategy: copy, compress (default: copy)")
 	backupCmd.Flags().BoolVar(&useCloud, "cloud", false, "Enable cloud backup (not yet implemented)")
 	backupCmd.Flags().BoolVar(&useFTP, "ftp", false, "Enable FTP backup (not yet implemented)")
 }
