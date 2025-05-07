@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"cli_backup_tool/internal/backupengine"
+	"cli_backup_tool/internal/common"
 	"cli_backup_tool/internal/logging"
 	"os"
 	"path/filepath"
@@ -10,11 +11,12 @@ import (
 )
 
 var (
-	sourcePath string
-	destPath   []string
-	strategy   string
-	useCloud   bool
-	useFTP     bool
+	sourcePath      string
+	destPath        []string
+	parsedDestPaths []common.DestinationStruct
+	strategy        string
+	useCloud        bool
+	useFTP          bool
 )
 
 var backupCmd = &cobra.Command{
@@ -36,15 +38,17 @@ var backupCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Convert destinations to absolute paths
-		var absDests []string
 		for _, d := range destPath {
-			absDest, err := filepath.Abs(d)
-			if err != nil {
-				logging.ErrorLogger.Printf("Error resolving destination path: %v\n", err)
-				os.Exit(1)
+			destObj := common.PrepareDestinationStruct(d)
+			if !destObj.IsCloud {
+				absPath, err := filepath.Abs(destObj.Path)
+				if err != nil {
+					logging.ErrorLogger.Printf("Error resolving local path: %v\n", err)
+					os.Exit(1)
+				}
+				destObj.Path = absPath
 			}
-			absDests = append(absDests, absDest)
+			parsedDestPaths = append(parsedDestPaths, destObj)
 		}
 
 		// Select strategy
@@ -60,7 +64,7 @@ var backupCmd = &cobra.Command{
 		}
 
 		// Execute backup
-		if err := backup.Backup(absSource, absDests); err != nil {
+		if err := backup.Backup(absSource, parsedDestPaths); err != nil {
 			logging.ErrorLogger.Printf("Backup failed: %v\n", err)
 			os.Exit(1)
 		}

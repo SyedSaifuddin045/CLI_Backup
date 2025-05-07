@@ -1,6 +1,7 @@
 package backupengine
 
 import (
+	"cli_backup_tool/internal/common"
 	"os"
 	"sync"
 
@@ -14,7 +15,7 @@ func NewCopyBackupStrategy() *CopyBackupStrategy {
 }
 
 // Backup performs a recursive copy from source to each destination
-func (r *CopyBackupStrategy) Backup(source string, destinations []string) error {
+func (r *CopyBackupStrategy) Backup(source string, destinations []common.DestinationStruct) error {
 	// No need for fmt package import - using only the logger
 
 	// Create a wait group to wait for all backup operations to complete
@@ -33,11 +34,11 @@ func (r *CopyBackupStrategy) Backup(source string, destinations []string) error 
 		go func() {
 			defer wg.Done()
 
-			logging.InfoLogger.Printf("Starting concurrent backup to %s\n", destination)
+			logging.InfoLogger.Printf("Starting concurrent backup to %s\n", destination.Path)
 
 			// Define the file handling function for this destination
 			fileProcessor := func(sourcePath, destPath string, info os.FileInfo) error {
-				err := copyFile(sourcePath, destPath, info)
+				err := CopyFile(sourcePath, destPath, info)
 				if err != nil {
 					logging.ErrorLogger.Printf("Error copying file %s: %v\n", sourcePath, err)
 				}
@@ -54,15 +55,15 @@ func (r *CopyBackupStrategy) Backup(source string, destinations []string) error 
 			}
 
 			// Use the utility function to walk the directory
-			err := WalkSourceToDest(source, destination, fileProcessor, dirProcessor)
+			err := WalkSourceToDest(source, destination.Path, fileProcessor, dirProcessor)
 
 			if err != nil {
-				logging.ErrorLogger.Printf("Failed to back up to %s: %v\n", destination, err)
+				logging.ErrorLogger.Printf("Failed to back up to %s: %v\n", destination.Path, err)
 				errChan <- err
 				return
 			}
 
-			logging.InfoLogger.Printf("Backup to %s completed successfully\n", destination)
+			logging.InfoLogger.Printf("Backup to %s completed successfully\n", destination.Path)
 		}()
 	}
 
